@@ -1,4 +1,4 @@
-function r = computeInlier(cloud,model,delta)
+    function r = computeInlier(cloud,model,delta)
 % compute inlier binary map of inlier of specific model;
 % delta is the tolerance to separate inlier and outlier
 

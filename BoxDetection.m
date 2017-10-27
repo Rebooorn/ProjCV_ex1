@@ -29,8 +29,9 @@ cloud = cloud1;
 max_inlier = 0;
 best_model = planeModel;
 best_model.planeVector = [0 0 0];
-best_model.maxIteration = 1000;
+best_model.maxIteration = 10000;
 best_model.threshold = floor(0.6*424*512);
+delta = 0.05;
 % model contains: 1. plane parameter(3D vector);
 %                 2. threshold to measure the quality of the model (use
 %                 60% of pixel num here)
@@ -38,10 +39,15 @@ best_model.threshold = floor(0.6*424*512);
 count = 0;
 while count<best_model.maxIteration
 %   randomly sample 3 points for model calculation
-    samplesX = randsample(size(cloud,1),3);
-    samplesY = randsample(size(cloud,2),3);
+%   random sample should avoid unsuccessful points
+    samplesX=[1,1,1];
+    samplesY=[1,1,1];
+    while 
+        samplesX = randsample(size(cloud,1),3);
+        samplesY = randsample(size(cloud,2),3);
+    end
     model = estimate_plane(samplesX,samplesY,best_model,cloud);
-    inlier = computeInlier(cloud,model); % return binary image
+    inlier = computeInlier(cloud,model,delta); % return binary image
     num_inlier = length(inlier(inlier==1));
     if num_inlier>max_inlier
         best_model = model;
@@ -53,7 +59,7 @@ while count<best_model.maxIteration
     end
 end
 % mask amplitudes image and display
-floor = computeInlier(cloud,best_model);
+floor = computeInlier(cloud,best_model,delta);
 figure; imagesc(floor); title('floor detected');
 
 
