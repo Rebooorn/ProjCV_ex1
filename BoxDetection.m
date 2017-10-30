@@ -29,38 +29,101 @@ cloud = cloud1;
 max_inlier = 0;
 best_model = planeModel;
 best_model.planeVector = [0 0 0];
-best_model.maxIteration = 10000;
-best_model.threshold = floor(0.6*424*512);
-delta = 0.05;
+best_model.maxIteration = 1000;
+best_model.threshold = round(0.8*424*512);
+delta = 0.06;
 % model contains: 1. plane parameter(3D vector);
 %                 2. threshold to measure the quality of the model (use
 %                 60% of pixel num here)
 %                 3. parameter for maximum iterations
-count = 0;
-while count<best_model.maxIteration
-%   randomly sample 3 points for model calculation
-%   random sample should avoid unsuccessful points
-    samplesX=[1,1,1];
-    samplesY=[1,1,1];
-    while 
-        samplesX = randsample(size(cloud,1),3);
-        samplesY = randsample(size(cloud,2),3);
-    end
-    model = estimate_plane(samplesX,samplesY,best_model,cloud);
-    inlier = computeInlier(cloud,model,delta); % return binary image
-    num_inlier = length(inlier(inlier==1));
-    if num_inlier>max_inlier
-        best_model = model;
-        max_inlier = num_inlier;
-    end
-%   exit rule
-    if num_inlier > best_model.threshold
-        break;
-    end
-end
+
+% count = 0;
+% while count<best_model.maxIteration
+% %   randomly sample 3 points for model calculation
+% %   random sample should avoid unsuccessful points
+%     samplesX=[1,1,1];
+%     samplesY=[1,1,1];
+%     while ~all(reshape(cloud(samplesX,samplesY,:),27,1))
+%         samplesX = randsample(size(cloud,1),3);
+%         samplesY = randsample(size(cloud,2),3);
+%     end
+%     model = estimate_plane(samplesX,samplesY,best_model,cloud);
+%     inlier = computeInlier(cloud,model,delta); % return binary image
+%     num_inlier = length(inlier(inlier==1));
+%     if num_inlier>max_inlier
+%         best_model = model;
+%         max_inlier = num_inlier;
+%     end
+% %   exit rule
+%     if num_inlier > best_model.threshold
+%         break;
+%     end
+%     
+%     count = count+1;
+% end
+
+best_model = RANSAC(cloud,best_model,delta);
+% mask of failure detection 
+failMask = all(cloud,3);
+% figure;imagesc(failMask);title('failure detection');
+
 % mask amplitudes image and display
 floor = computeInlier(cloud,best_model,delta);
-figure; imagesc(floor); title('floor detected');
+figure; imagesc(floor); title('floor detected', 'FontSize', 18);
+
+%% Morphological operation
+floor_closed = bwmorph(floor,'close');
+figure; imagesc(floor_closed); title('floor detected(closed)', 'FontSize', 18);
+
+%% Detect box in image
+BoxDetected = ~floor_closed.*failMask;
+figure; imagesc(BoxDetected);title('Box mask', 'FontSize', 18);
+BoxReal = amplitudes1.*BoxDetected;
+% figure; imagesc(BoxReal); title('Real Box');
+
+%% Detect upper plane of the box
+delta = 0.01;
+cloud_filter = cloud;
+cloud_filter(:,:,1)=cloud_filter(:,:,1).*BoxDetected;
+cloud_filter(:,:,2)=cloud_filter(:,:,2).*BoxDetected;
+cloud_filter(:,:,3)=cloud_filter(:,:,3).*BoxDetected;
+upBox_best_model = planeModel;
+upBox_best_model.planeVector = [0 0 0];
+upBox_best_model.maxIteration = 1000;
+upBox_best_model.threshold = round(0.8*424*512);
+upBox_best_model = RANSAC(cloud_filter,upBox_best_model,delta);
+
+upBox = computeInlier(cloud_filter,upBox_best_model,delta);
+figure; imagesc(upBox);title('upper plane of Box', 'FontSize', 18);
+
+%% use largest connected component in upBox as final result
+cc = bwconncomp(upBox);
+labeled = labelmatrix(cc);
+labeled(labeled>1)=0;  % only preserve largest connected component
+figure; imagesc(labeled); title('Largest connected component in upper plane', 'FontSize', 18);
+
+
+%% edge detection
+[B,L]=bwboundaries(labeled,'noholes');
+boundary = B{1};
+figure;imagesc(labeled);title('edge detection','FontSize',18);
+hold on
+plot(boundary(:,2),boundary(:,1),'w','LineWidth',2);
+hold off
+
+%% visualization of all results
+% Object                | Value |
+% failure detection,    |   0   |
+% floor,                |   1   |
+% box,                  |   2   |
+% box top plane,        |   3   |
+% top plane corners,    |   4   |
+
+FinalRes = floor + 2* BoxDetected + double(labeled);
+figure; imagesc(FinalRes); title('Visualization of Box and floor','FontSize',18);
+hold on
+plot(boundary(:,2),boundary(:,1),'w','LineWidth',2);
+hold off
 
 
 
@@ -70,7 +133,16 @@ figure; imagesc(floor); title('floor detected');
 
 
 
-%%
+
+
+
+
+
+
+
+
+
+
 
 
 
